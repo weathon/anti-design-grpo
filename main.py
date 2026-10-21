@@ -110,8 +110,9 @@ v_bank = [np.random.rand(768)]
 os.makedirs("images", exist_ok=True)
 index = len(os.listdir("images"))  # don't overwrite images from earlier/resumed runs
 
-# raw cosine diversity is tightly clustered, so rescale it with an EMA of its mean/std to mean 1, std 1
+# raw cosine diversity is tightly clustered, so rescale it with an EMA of its mean/std to mean 1, std DIV_TARGET_STD
 DIV_EMA_DECAY = 0.99
+DIV_TARGET_STD = 0.3
 div_mean, div_var = None, None
 def normalize_diversity(raw):
   global div_mean, div_var
@@ -122,7 +123,7 @@ def normalize_diversity(raw):
     div_mean = DIV_EMA_DECAY * div_mean + (1 - DIV_EMA_DECAY) * float(raw.mean())
     div_var = DIV_EMA_DECAY * div_var + (1 - DIV_EMA_DECAY) * float(((raw - div_mean) ** 2).mean())
   std = max(np.sqrt(div_var), 1e-3)
-  return ((raw - div_mean) / std + 1).tolist()
+  return ((raw - div_mean) / std * DIV_TARGET_STD + 1).tolist()
 def reward_func_image(completions, product, log_extra=None, log_metric=None, **kwargs):
   global index, v_bank
   prompts = [extract(completion[-1]["content"]) for completion in completions]
