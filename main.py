@@ -38,12 +38,17 @@ def gen_image(prompt):
 
 past = []
 
+MAX_PROMPT_CHARS = 3000
+
+def prompt_ok(prompt):
+  return 0 < len(prompt) <= MAX_PROMPT_CHARS
+
 def format_reward(completions, log_extra=None, log_metric=None, **kwargs):
   rewards = []
   for com in completions:
     final = extract(com[-1]["content"])
     r_0 = (final.count("%%") == 1) * 0.5 # has both positive and negative prompt
-    r_2 = (0 < len(final) <= 3000) * 1 # cannot be empty, too long or runaway
+    r_2 = prompt_ok(final) * 1 # cannot be empty, too long or runaway
     rewards.append(r_0 + r_2) # label leaks are already penalized by the text judge's validity gate
   return rewards
 
@@ -54,16 +59,22 @@ def explicit_text_reward(completions, product, log_extra=None, log_metric=None, 
   # this product, otherwise one lucky slogan gets reinforced and pasted onto every poster
   rewards = []
   for com in completions:
-    positive = extract(com[-1]["content"]).split("%%")[0]
-    quoted = QUOTED_TEXT.findall(positive)
-    rewards.append(judge.poster_text_reward(quoted, product[0]) if quoted else 0.0)
+    final = extract(com[-1]["content"])
+    quoted = QUOTED_TEXT.findall(final.split("%%")[0])
+    rewards.append(judge.poster_text_reward(quoted, product[0]) if quoted and prompt_ok(final) else 0.0)
   return rewards
 
 def reward_func_text(completions, log_extra=None, log_metric=None, **kwargs):
   global past
   bank_was_empty = not past
-  gate, novelty, anti_design = zip(*[judge.text_reward(extract(completion[-1]["content"]), past) for completion in completions])
-  past.extend([extract(i[-1]["content"].split("%%")[0]) for i in completions])
+  # over-length prompts earn nothing from any judge: with only the format reward's -1 at stake, the 4B wrote
+  # 3,000-10,000 character rule lists because more chaotic detail scored higher on anti-design
+  finals = [extract(completion[-1]["content"]) for completion in completions]
+  keep = [i for i, p in enumerate(finals) if prompt_ok(p)]
+  if not keep:
+    return [0.0] * len(finals)
+  gate, novelty, anti_design = zip(*[judge.text_reward(finals[i], past) for i in keep])
+  past.extend([finals[i].split("%%")[0] for i in keep])
   if len(past) > 100:
     past = past[-100:]
   # style novelty vs the past bank is normalized like image diversity (mean 1, std DIV_TARGET_STD) so it carries
@@ -72,7 +83,9 @@ def reward_func_text(completions, log_extra=None, log_metric=None, **kwargs):
   novelty_scores = [1.0] * len(novelty) if bank_was_empty else text_div_norm(novelty)
   # novelty only counts in proportion to anti-design: unscaled, "depart from the dominant style" was satisfied by
   # drifting toward clean retail ads (image anti_design fell 0.79 -> 0.53 in 30 steps)
-  rewards = [g * a * (0.5 + n) for g, a, n in zip(gate, anti_design, novelty_scores)]
+  rewards = [0.0] * len(finals)
+  for i, g, a, n in zip(keep, gate, anti_design, novelty_scores):
+    rewards[i] = g * a * (0.5 + n)
   if wandb.run is not None:
     wandb.log({"text_diversity/raw_mean": float(np.mean(novelty)), "text_diversity/ema_mean": text_div_norm.mean, "text_diversity/ema_std": text_div_norm.std}, commit=False)
   print(rewards)
@@ -161,9 +174,9 @@ image_div_norm = RunningNorm()
 text_div_norm = RunningNorm(min_std=0.05)  # probabilities, not tightly clustered cosine values
 
 def reward_func_image(completions, product, log_extra=None, log_metric=None, **kwargs):
-  # empty completions have no prompt: skip the ~9s Z-Image call and score them 0
+  # empty or over-length prompts: skip the ~9s Z-Image call and score them 0
   prompts = [extract(completion[-1]["content"]) for completion in completions]
-  keep = [i for i, p in enumerate(prompts) if p]
+  keep = [i for i, p in enumerate(prompts) if prompt_ok(p)]
   rewards = [0.0] * len(prompts)
   if keep:
     for i, r in zip(keep, _image_rewards([prompts[i] for i in keep], product)):
@@ -217,7 +230,7 @@ training_args = GRPOConfig(
     num_train_epochs=2,
     logging_steps=1,
     log_completions=True,
-    max_completion_length=2048,
+    max_completion_length=1024,  # MAX_PROMPT_CHARS (3000 chars) is ~700 tokens; longer generations earn nothing anyway
     chat_template_kwargs={"enable_thinking": False},  # Qwen3.5-4B's template thinks by default (2B's does not); small models loop in their thinking
     top_k=50,  # same as the fixed-prompt eval (HF generate default), i.e. how the model will be sampled in deployment
     optim="adamw_torch_8bit",  # torchao 8-bit AdamW: full fine-tuning the 4B with fp32 Adam states does not fit next to Z-Image + HPSv3
