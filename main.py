@@ -342,7 +342,7 @@ print("resuming from", last_ckpt)
 trainer.train(resume_from_checkpoint=last_ckpt)
 
 # %%
-HUB_REPO = "weathon/qwen3.5-2b-antidesign-poster-grpo"
+HUB_REPO = "weathon/qwen3.5-4b-antidesign-poster-grpo"
 trainer.save_model(os.path.join(training_args.output_dir, "final"))
 trainer.model.push_to_hub(HUB_REPO, private=True)
 trainer.processing_class.push_to_hub(HUB_REPO, private=True)
