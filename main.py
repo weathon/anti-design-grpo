@@ -124,6 +124,7 @@ def normalize_diversity(raw):
     div_var = DIV_EMA_DECAY * div_var + (1 - DIV_EMA_DECAY) * float(((raw - div_mean) ** 2).mean())
   std = max(np.sqrt(div_var), 1e-3)
   return ((raw - div_mean) / std * DIV_TARGET_STD + 1).tolist()
+
 def reward_func_image(completions, product, log_extra=None, log_metric=None, **kwargs):
   global index, v_bank
   prompts = [extract(completion[-1]["content"]) for completion in completions]
@@ -134,6 +135,8 @@ def reward_func_image(completions, product, log_extra=None, log_metric=None, **k
       image_paths.append(f"images/{index:05d}.png")
       index += 1 
   rewards = [judge.image_reward(path, product[0]) for path in image_paths]
+  neg_hpsv3_rewards = [judge.neg_hpsv3_reward(path, product[0]) for path in image_paths]
+
   raw_diversity = []
   for path in image_paths:
     v = extract_features(path).cpu().numpy()[0]
@@ -146,10 +149,10 @@ def reward_func_image(completions, product, log_extra=None, log_metric=None, **k
   for i in range(len(prompts)):
     if wandb.run is not None:
       wandb.log({
-          "image": wandb.Image(images[i], caption=f"reward: {rewards[i]}, diversity_scores: {diversity_scores[i]}, product: {product[0]}")
+          "image": wandb.Image(images[i], caption=f"reward: {rewards[i]}, diversity_scores: {diversity_scores[i]}, neg_hpsv3: {neg_hpsv3_rewards[i]}, product: {product[0]}")
       })
   print(rewards)
-  return [(i + j) for i, j in zip(rewards, diversity_scores)]
+  return [(i + j + k) for i, j, k in zip(rewards, diversity_scores, neg_hpsv3_rewards)]
 
 # %%
 from trl import GRPOConfig, GRPOTrainer
@@ -157,6 +160,9 @@ from trl import GRPOConfig, GRPOTrainer
 training_args = GRPOConfig(
     learning_rate=1e-5,
     entropy_coef=0.05,
+    use_adaptive_entropy=True,  # bonus only kicks in when entropy falls below entropy_target
+    entropy_target=1.0,  # base model starts at ~1.4 nats/token
+    warmup_steps=50,
     per_device_train_batch_size=4,
     num_generations=4,
     report_to="wandb",

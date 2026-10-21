@@ -136,3 +136,18 @@ def image_reward(image_path, product):
       ],
   )
   return (decision.answers[0].score / 3 + decision.answers[1].probability) / 2 # range: 0-1
+
+
+import requests
+
+session = requests.Session()
+session.trust_env = False  # ignore http_proxy, same as wget --no-proxy
+
+def neg_hpsv3_reward(image_path, product):
+    r = session.get(
+        "http://127.0.0.1:5000/",
+        params={"path": image_path, "prompt": "a beautifully designed poster"},  # no product: only penalize polish, not product alignment
+        timeout=300,
+    )
+    r.raise_for_status()
+    return 1 - r.json()[0]/15
