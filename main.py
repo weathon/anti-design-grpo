@@ -41,11 +41,16 @@ past = []
 def format_reward(completions, log_extra=None, log_metric=None, **kwargs):
   rewards = []
   for com in completions:
-    r_0 = (com[-1]["content"].count("%%") == 1) # has both positive and negative prompt
-    r_1 = ("prompt" not in com[-1]["content"]) * 1 # does not leak the prompt label into the text
+    r_0 = (com[-1]["content"].count("%%") == 1) * 0.5 # has both positive and negative prompt
     r_2 = (len(com[-1]["content"]) <= 500) * 1 # cannot be too long or runaway
-    rewards.append(r_0 + r_1 + r_2)
+    rewards.append(r_0 + r_2) # label leaks are already penalized by the text judge's validity gate
   return rewards
+
+QUOTED_TEXT = re.compile(r'["“「『]([^"“”「」『』]{2,80})["”」』]')
+
+def explicit_text_reward(completions, log_extra=None, log_metric=None, **kwargs):
+  # Z-Image only renders legible text when the prompt spells it out, e.g. 'with the headline "READ ANYWHERE"'
+  return [1.0 if QUOTED_TEXT.search(extract(com[-1]["content"]).split("%%")[0]) else 0.0 for com in completions]
 
 def reward_func_text(completions, log_extra=None, log_metric=None, **kwargs):
   global past
@@ -181,7 +186,7 @@ training_args = GRPOConfig(
 
 # %%
 system_prompts = """
-Your job is to design a prompt for wild, unconventional, creative, and anti-design ad promotion posters for the object. The image should be a designed poster, not regular photo. You should output both a positive prompt and negative prompt, splited by '%%'. The negative prompt should describe thing that can push the poster into the wild domain from conventional ones. The negative prompt should not use negation.
+Your job is to design a prompt for wild, unconventional, creative, and anti-design ad promotion posters for the object. The image should be a designed poster, not regular photo. You should output both a positive prompt and negative prompt, splited by '%%'. The negative prompt should describe thing that can push the poster into the wild domain from conventional ones. The negative prompt should not use negation. Any text that should appear on the poster (headline, slogan, brand name) must be written out explicitly in double quotes in the positive prompt, e.g. with the headline "READ ANYWHERE".
 Format:
 positive_prompt %% negative_prompt.
 """
@@ -305,7 +310,7 @@ open(run_id_file, "w").write(wandb.run.id)
 
 trainer = GRPOTrainer(
     model=model,
-    reward_funcs=[format_reward, reward_func_text, reward_func_image],
+    reward_funcs=[format_reward, explicit_text_reward, reward_func_text, reward_func_image],
     train_dataset=ds,
     args=training_args,
     callbacks=[FixedPromptEval()],
