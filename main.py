@@ -70,7 +70,9 @@ def reward_func_text(completions, log_extra=None, log_metric=None, **kwargs):
   # as much weight; the 4B policy otherwise settles into one look (neon slime typography) on every product
   # with an empty bank every prompt is "novel" (1.0); seeding the running stats with that made the next batch hugely negative
   novelty_scores = [1.0] * len(novelty) if bank_was_empty else text_div_norm(novelty)
-  rewards = [g * (0.5 * a + n) for g, a, n in zip(gate, anti_design, novelty_scores)]
+  # novelty only counts in proportion to anti-design: unscaled, "depart from the dominant style" was satisfied by
+  # drifting toward clean retail ads (image anti_design fell 0.79 -> 0.53 in 30 steps)
+  rewards = [g * a * (0.5 + n) for g, a, n in zip(gate, anti_design, novelty_scores)]
   if wandb.run is not None:
     wandb.log({"text_diversity/raw_mean": float(np.mean(novelty)), "text_diversity/ema_mean": text_div_norm.mean, "text_diversity/ema_std": text_div_norm.std}, commit=False)
   print(rewards)
@@ -194,7 +196,8 @@ def _image_rewards(prompts, product):
           "image": wandb.Image(images[i], caption=f"valid: {valid[i]}, anti_design: {anti_design[i]}, diversity_scores: {diversity_scores[i]}, neg_hpsv3: {neg_hpsv3_rewards[i]}, product: {product[0]}")
       })
   # valid_design gates the whole image reward, like validity does for the text reward
-  rewards = [v * (a + d + h) for v, a, d, h in zip(valid, anti_design, diversity_scores, neg_hpsv3_rewards)]
+  # diversity is scaled by anti_design for the same reason as the text reward: novelty toward conventional ads should not pay
+  rewards = [v * (a * (1 + d) + h) for v, a, d, h in zip(valid, anti_design, diversity_scores, neg_hpsv3_rewards)]
   print(rewards)
   return rewards
 
