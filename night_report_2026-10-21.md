@@ -27,3 +27,9 @@ At lr 1e-5 the policy moves within 15–35 steps to wherever the judges currentl
 
 - `check.py`: degradation scan (ignores quoted ad copy), wandb diversity curves, anti-design/validity tracker on the newest 16 images.
 - An earlier version of the tracker paired images with the wrong step's product (Z-Image skips over-length prompts, and images of the step in progress exist before its completions file). Fixed at 13:22 UTC; the two affected log entries are marked.
+
+## Run 16 status (lr 3e-6), as of 15:05 UTC, step 48
+
+- Healthy on every guard: anti-design 0.72–0.84 (image judge, newest 16), validity ~0.75–0.9 (dips only on abstract products like "funeral service", "air", and one "credit card" step), `%%` in 22–24/24, no instruction-style prompts, length ~200–250 tokens, entropy ~1.6–1.75.
+- Products and quoted copy fit well ("TOFU IS THE NEW GOLD", "BARK BEFORE YOU DINE", "FORGET YOUR HARD DRIVE").
+- But style has converged onto one look for every product: acid green + magenta, black spray paint, sticker-collage chaos, dripping graffiti type. This is option 4 above (style collapse); the diversity rewards slow it but do not prevent it. Left running since it is not one of the stop conditions.
