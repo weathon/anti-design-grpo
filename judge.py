@@ -151,3 +151,32 @@ def neg_hpsv3_reward(image_path, product):
     )
     r.raise_for_status()
     return 1 - r.json()[0]/15
+
+
+def poster_text_reward(quoted_texts, product):
+    texts = "\n".join(f"- {t}" for t in quoted_texts)
+    decision = client.decisions.create(
+        model="gpt-6-luna",
+        input=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": f"""Product being advertised: {product}
+
+Text that will be printed on the poster:
+{texts}""",
+                    },
+                ],
+            }
+        ],
+        questions=[
+            {
+                "type": "predicate",
+                "name": "fitting_copy",
+                "instructions": """Answer true only if the poster text reads as real advertising copy written for this specific product: it makes sense as words (not gibberish or random tokens), and it relates to the product, what it does, or why someone would want it. Wild, absurd, or provocative copy is fine as long as it is clearly about this product. Answer false for generic slogans that could sit on any product's poster, copy that is about a different product, or text that is just a style description rather than words meant to be printed.""",
+            },
+        ],
+    )
+    return decision.answers[0].probability # range: 0-1

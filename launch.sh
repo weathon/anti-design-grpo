@@ -14,6 +14,6 @@ for _ in $(seq 120); do
 done
 [ "$code" = "000" ] && { echo "HPSv3 server not up after 10 min"; exit 1; }
 n=$(( $(ls logs/train_*.log 2>/dev/null | sed 's/[^0-9]//g' | sort -n | tail -1) + 1 ))
-nohup /home/ubuntu/miniconda3/bin/python -u main.py > logs/train_$n.log 2>&1 &
+nohup /home/ubuntu/miniconda3/envs/grpo-vllm/bin/python -u main.py > logs/train_$n.log 2>&1 &
 echo $! > logs/pid
 echo "hpsv3 pid $(cat logs/hps_pid), train pid $(cat logs/pid), log logs/train_$n.log"

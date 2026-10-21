@@ -19,9 +19,9 @@ import judge
 
 def extract(text):
   if "</think>" in text:
-    return text.split("</think>")[1]
+    return text.split("</think>")[-1].strip()
   else:
-    return text
+    return text.strip()
 
 
 def gen_image(prompt):
@@ -41,16 +41,23 @@ past = []
 def format_reward(completions, log_extra=None, log_metric=None, **kwargs):
   rewards = []
   for com in completions:
-    r_0 = (com[-1]["content"].count("%%") == 1) * 0.5 # has both positive and negative prompt
-    r_2 = (len(com[-1]["content"]) <= 500) * 1 # cannot be too long or runaway
+    final = extract(com[-1]["content"])
+    r_0 = (final.count("%%") == 1) * 0.5 # has both positive and negative prompt
+    r_2 = (0 < len(final) <= 3000) * 1 # cannot be empty, too long or runaway
     rewards.append(r_0 + r_2) # label leaks are already penalized by the text judge's validity gate
   return rewards
 
 QUOTED_TEXT = re.compile(r'["“「『]([^"“”「」『』]{2,80})["”」』]')
 
-def explicit_text_reward(completions, log_extra=None, log_metric=None, **kwargs):
-  # Z-Image only renders legible text when the prompt spells it out, e.g. 'with the headline "READ ANYWHERE"'
-  return [1.0 if QUOTED_TEXT.search(extract(com[-1]["content"]).split("%%")[0]) else 0.0 for com in completions]
+def explicit_text_reward(completions, product, log_extra=None, log_metric=None, **kwargs):
+  # Z-Image only renders legible text when the prompt spells it out in quotes; the quoted copy must also fit
+  # this product, otherwise one lucky slogan gets reinforced and pasted onto every poster
+  rewards = []
+  for com in completions:
+    positive = extract(com[-1]["content"]).split("%%")[0]
+    quoted = QUOTED_TEXT.findall(positive)
+    rewards.append(judge.poster_text_reward(quoted, product[0]) if quoted else 0.0)
+  return rewards
 
 def reward_func_text(completions, log_extra=None, log_metric=None, **kwargs):
   global past
@@ -72,7 +79,7 @@ pretrained_model_name = "facebook/dinov3-convnext-tiny-pretrain-lvd1689m"
 dino_processor = AutoImageProcessor.from_pretrained(pretrained_model_name)
 dino = AutoModel.from_pretrained(
     pretrained_model_name,
-    device_map="cuda",
+    device_map="cpu",  # free GPU memory for colocated vLLM
 )
 
 # %%
@@ -131,8 +138,17 @@ def normalize_diversity(raw):
   return ((raw - div_mean) / std * DIV_TARGET_STD + 1).tolist()
 
 def reward_func_image(completions, product, log_extra=None, log_metric=None, **kwargs):
-  global index, v_bank
+  # empty completions have no prompt: skip the ~9s Z-Image call and score them 0
   prompts = [extract(completion[-1]["content"]) for completion in completions]
+  keep = [i for i, p in enumerate(prompts) if p]
+  rewards = [0.0] * len(prompts)
+  if keep:
+    for i, r in zip(keep, _image_rewards([prompts[i] for i in keep], product)):
+      rewards[i] = r
+  return rewards
+
+def _image_rewards(prompts, product):
+  global index, v_bank
   images = [gen_image(prompt) for prompt in prompts]
   image_paths = []
   for i in range(len(images)):
@@ -178,6 +194,9 @@ training_args = GRPOConfig(
     logging_steps=1,
     log_completions=True,
     max_completion_length=2048,
+    use_vllm=True,
+    vllm_mode="colocate",
+    vllm_gpu_memory_utilization=0.2,
     output_dir="trainer_output",
     save_strategy="steps",
     save_steps=10,
@@ -186,7 +205,7 @@ training_args = GRPOConfig(
 
 # %%
 system_prompts = """
-Your job is to design a prompt for wild, unconventional, creative, and anti-design ad promotion posters for the object. The image should be a designed poster, not regular photo. You should output both a positive prompt and negative prompt, splited by '%%'. The negative prompt should describe thing that can push the poster into the wild domain from conventional ones. The negative prompt should not use negation. Any text that should appear on the poster (headline, slogan, brand name) must be written out explicitly in double quotes in the positive prompt, e.g. with the headline "READ ANYWHERE".
+Your job is to design a prompt for wild, unconventional, creative, and anti-design ad promotion posters for the object. The image should be a designed poster, not regular photo. You should output both a positive prompt and negative prompt, splited by '%%'. The negative prompt should describe thing that can push the poster into the wild domain from conventional ones. The negative prompt should not use negation. Any text that should appear on the poster (headline, slogan, brand name) must be written out explicitly in double quotes in the positive prompt, and must be ad copy written for this specific product.
 Format:
 positive_prompt %% negative_prompt.
 """
