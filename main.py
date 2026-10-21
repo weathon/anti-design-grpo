@@ -166,7 +166,8 @@ training_args = GRPOConfig(
     entropy_target=1.0,  # base model starts at ~1.4 nats/token
     warmup_steps=50,
     per_device_train_batch_size=4,
-    num_generations=4,
+    gradient_accumulation_steps=2,  # 4 x 2 = one group of 8 per optimizer step, without 8-sequence backward memory
+    num_generations=8,
     report_to="wandb",
     num_train_epochs=2,
     logging_steps=1,
