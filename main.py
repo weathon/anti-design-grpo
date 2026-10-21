@@ -175,7 +175,7 @@ training_args = GRPOConfig(
     max_completion_length=2048,
     output_dir="trainer_output",
     save_strategy="steps",
-    save_steps=50,
+    save_steps=10,
     save_total_limit=10,
 )
 
@@ -260,7 +260,7 @@ from transformers.trainer_utils import get_last_checkpoint
 
 EVAL_PRODUCT = "coffee"
 EVAL_SEED = 1234
-EVAL_STEPS = 50
+EVAL_STEPS = 10
 
 class FixedPromptEval(TrainerCallback):
   """Every EVAL_STEPS steps, sample one completion for a fixed prompt with a fixed seed and log the generated image."""
