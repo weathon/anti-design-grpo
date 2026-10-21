@@ -218,7 +218,7 @@ def _image_rewards(prompts, product):
 from trl import GRPOConfig, GRPOTrainer
 
 training_args = GRPOConfig(
-    learning_rate=1e-5,
+    learning_rate=3e-6,  # 1e-5 drifted onto a different judge loophole within ~30 steps in each of runs 13-15
     entropy_coef=0.05,
     use_adaptive_entropy=True,  # bonus only kicks in when entropy falls below entropy_target
     entropy_target=1.0,  # base model starts at ~1.4 nats/token
