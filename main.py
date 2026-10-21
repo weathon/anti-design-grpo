@@ -134,7 +134,7 @@ def reward_func_image(completions, product, log_extra=None, log_metric=None, **k
       images[i].save(f"images/{index:05d}.png")
       image_paths.append(f"images/{index:05d}.png")
       index += 1 
-  rewards = [judge.image_reward(path, product[0]) for path in image_paths]
+  anti_design, valid = zip(*[judge.image_reward(path, product[0]) for path in image_paths])
   neg_hpsv3_rewards = [judge.neg_hpsv3_reward(path, product[0]) for path in image_paths]
 
   raw_diversity = []
@@ -149,10 +149,12 @@ def reward_func_image(completions, product, log_extra=None, log_metric=None, **k
   for i in range(len(prompts)):
     if wandb.run is not None:
       wandb.log({
-          "image": wandb.Image(images[i], caption=f"reward: {rewards[i]}, diversity_scores: {diversity_scores[i]}, neg_hpsv3: {neg_hpsv3_rewards[i]}, product: {product[0]}")
+          "image": wandb.Image(images[i], caption=f"valid: {valid[i]}, anti_design: {anti_design[i]}, diversity_scores: {diversity_scores[i]}, neg_hpsv3: {neg_hpsv3_rewards[i]}, product: {product[0]}")
       })
+  # valid_design gates the whole image reward, like validity does for the text reward
+  rewards = [v * (a + d + h) for v, a, d, h in zip(valid, anti_design, diversity_scores, neg_hpsv3_rewards)]
   print(rewards)
-  return [(i + j + k) for i, j, k in zip(rewards, diversity_scores, neg_hpsv3_rewards)]
+  return rewards
 
 # %%
 from trl import GRPOConfig, GRPOTrainer

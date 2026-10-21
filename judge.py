@@ -135,7 +135,7 @@ def image_reward(image_path, product):
           },
       ],
   )
-  return (decision.answers[0].score / 3 + decision.answers[1].probability) / 2 # range: 0-1
+  return decision.answers[0].score / 3, decision.answers[1].probability # anti_design (0-1), valid_design gate (0-1)
 
 
 import requests
