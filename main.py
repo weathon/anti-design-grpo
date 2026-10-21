@@ -164,7 +164,7 @@ training_args = GRPOConfig(
     entropy_coef=0.05,
     use_adaptive_entropy=True,  # bonus only kicks in when entropy falls below entropy_target
     entropy_target=1.0,  # base model starts at ~1.4 nats/token
-    warmup_steps=50,
+    warmup_steps=10,
     per_device_train_batch_size=4,
     gradient_accumulation_steps=2,  # 4 x 2 = one group of 8 per optimizer step, without 8-sequence backward memory
     num_generations=8,
@@ -246,7 +246,7 @@ def format_prompt(prompt):
           "content": prompt
       }
   ]
-ds = Dataset.from_list([{"prompt": format_prompt(question.replace("<name>", name)), "product": name} for name in names] * 10)
+ds = Dataset.from_list([{"prompt": format_prompt(question.replace("<name>", name)), "product": name} for name in names])
 
 # %%
 from transformers import AutoProcessor, AutoModelForMultimodalLM
