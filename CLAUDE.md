@@ -5,6 +5,9 @@ Keep notes here, not in Claude's memory directory: this VM wipes everything outs
 ## User
 - Timezone is America/Vancouver; the VM clock is UTC. Only send reminder push notifications between 12pm and 12am local time (19:00–07:00 UTC during PDT, 20:00–08:00 UTC during PST from Nov 1).
 
+## Research constraint
+- The research question is about diversity from a FIXED input (system prompt + product name only). Never add style directions or any other variation to the input to get diversity; it has to come from the policy itself.
+
 ## Sampling: training vs eval
 - Training rollouts and the fixed-prompt eval both sample with temperature 1.0, top_k=50 (`top_k=50` in `GRPOConfig`; HF `generate` default for eval). top_k=50 is the deployment setting; use it too when benchmarking the trained model (e.g. against GPT).
 - History: rollouts used top_k=0 (full vocabulary) until 2026-10-21. With the 2B model that made rollouts much noisier than eval, and the run degraded into instruction-style prompts ("Create a wild poster for X, do not ..."), so training was switched to top_k=50.
