@@ -122,7 +122,9 @@ v_bank = [np.random.rand(768)]
 os.makedirs("images", exist_ok=True)
 index = len(os.listdir("images"))  # don't overwrite images from earlier/resumed runs
 
-# raw cosine diversity is tightly clustered, so rescale it with an EMA of its mean/std to mean 1, std DIV_TARGET_STD
+# raw cosine diversity is tightly clustered, so rescale it with an EMA of its mean/std to mean 1, std DIV_TARGET_STD.
+# The EMA (rather than fixed stats) is needed because raw diversity trends down by construction: as the bank grows,
+# every new image has more near neighbours, so its top-k similarity rises even if the policy is not getting less diverse.
 DIV_EMA_DECAY = 0.99
 DIV_TARGET_STD = 0.3
 div_mean, div_var = None, None
