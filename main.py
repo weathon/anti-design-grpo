@@ -109,6 +109,20 @@ def bank_self_scores(bank, frac=0.01, k_min=20):
 v_bank = [np.random.rand(768)]
 os.makedirs("images", exist_ok=True)
 index = len(os.listdir("images"))  # don't overwrite images from earlier/resumed runs
+
+# raw cosine diversity is tightly clustered, so rescale it with an EMA of its mean/std to mean 1, std 1
+DIV_EMA_DECAY = 0.99
+div_mean, div_var = None, None
+def normalize_diversity(raw):
+  global div_mean, div_var
+  raw = np.asarray(raw, dtype=np.float64)
+  if div_mean is None:
+    div_mean, div_var = float(raw.mean()), float(raw.var())
+  else:
+    div_mean = DIV_EMA_DECAY * div_mean + (1 - DIV_EMA_DECAY) * float(raw.mean())
+    div_var = DIV_EMA_DECAY * div_var + (1 - DIV_EMA_DECAY) * float(((raw - div_mean) ** 2).mean())
+  std = max(np.sqrt(div_var), 1e-3)
+  return ((raw - div_mean) / std + 1).tolist()
 def reward_func_image(completions, product, log_extra=None, log_metric=None, **kwargs):
   global index, v_bank
   prompts = [extract(completion[-1]["content"]) for completion in completions]
@@ -119,12 +133,15 @@ def reward_func_image(completions, product, log_extra=None, log_metric=None, **k
       image_paths.append(f"images/{index:05d}.png")
       index += 1 
   rewards = [judge.image_reward(path, product[0]) for path in image_paths]
-  diversity_scores = []
+  raw_diversity = []
   for path in image_paths:
-    v = extract_features(path).cpu().numpy()[0] 
-    diversity_scores.append(1 - topk_cos_score(v_bank, v))
+    v = extract_features(path).cpu().numpy()[0]
+    raw_diversity.append(1 - topk_cos_score(v_bank, v))
     v_bank.append(v)
-  print(diversity_scores)
+  diversity_scores = normalize_diversity(raw_diversity)
+  print(raw_diversity, diversity_scores)
+  if wandb.run is not None:
+    wandb.log({"diversity/raw_mean": float(np.mean(raw_diversity)), "diversity/ema_mean": div_mean, "diversity/ema_std": float(np.sqrt(div_var))}, commit=False)
   for i in range(len(prompts)):
     if wandb.run is not None:
       wandb.log({
