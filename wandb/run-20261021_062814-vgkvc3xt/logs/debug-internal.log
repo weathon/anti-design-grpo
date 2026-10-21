@@ -1,0 +1,13 @@
+{"time":"2026-10-21T06:28:14.952023127Z","level":"INFO","msg":"wandb-core"}
+{"time":"2026-10-21T06:28:14.952069495Z","level":"INFO","msg":"stream: starting","core version":"0.31.0"}
+{"time":"2026-10-21T06:28:14.955908551Z","level":"INFO","msg":"stream: created new stream","id":"vgkvc3xt"}
+{"time":"2026-10-21T06:28:14.955960775Z","level":"INFO","msg":"handler: started"}
+{"time":"2026-10-21T06:28:14.961549342Z","level":"INFO","msg":"stream: started"}
+{"time":"2026-10-21T06:28:14.961562239Z","level":"INFO","msg":"writer: started","stream_id":"vgkvc3xt"}
+{"time":"2026-10-21T06:28:14.961595039Z","level":"INFO","msg":"sender: started"}
+{"time":"2026-10-21T06:28:15.45640325Z","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":0,"events_lines":1}
+{"time":"2026-10-21T06:28:15.689594177Z","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-10-21T06:28:30.45729288Z","level":"INFO","msg":"filestream: sending request","total_files":0,"uploaded_len":2}
+{"time":"2026-10-21T06:28:30.60048535Z","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-10-21T06:29:21.457966865Z","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":1,"events_lines":1}
+{"time":"2026-10-21T06:29:21.608875144Z","level":"INFO","msg":"filestream: request sent","status":"200 OK"}

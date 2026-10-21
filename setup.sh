@@ -1,0 +1,1 @@
+pip install -U openai git+https://github.com/huggingface/diffusers.git torchao huggingface-hub transformers trl openai dotenv wandb brotli torchvision
