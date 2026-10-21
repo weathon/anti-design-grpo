@@ -61,12 +61,18 @@ def explicit_text_reward(completions, product, log_extra=None, log_metric=None, 
 
 def reward_func_text(completions, log_extra=None, log_metric=None, **kwargs):
   global past
-  rewards = [judge.text_reward(extract(completion[-1]["content"]), past) for completion in completions]
+  gate, novelty, anti_design = zip(*[judge.text_reward(extract(completion[-1]["content"]), past) for completion in completions])
   past.extend([extract(i[-1]["content"].split("%%")[0]) for i in completions])
+  if len(past) > 100:
+    past = past[-100:]
+  # style novelty vs the past bank is normalized like image diversity (mean 1, std DIV_TARGET_STD) so it carries
+  # as much weight; the 4B policy otherwise settles into one look (neon slime typography) on every product
+  novelty_scores = text_div_norm(novelty)
+  rewards = [g * (0.5 * a + n) for g, a, n in zip(gate, anti_design, novelty_scores)]
+  if wandb.run is not None:
+    wandb.log({"text_diversity/raw_mean": float(np.mean(novelty)), "text_diversity/ema_mean": text_div_norm.mean, "text_diversity/ema_std": text_div_norm.std}, commit=False)
   print(rewards)
-  if len(past) > 200:
-    past = past[-200:]
-  return [i for i in rewards]
+  return rewards
 
 
 # %%
@@ -127,17 +133,27 @@ index = len(os.listdir("images"))  # don't overwrite images from earlier/resumed
 # every new image has more near neighbours, so its top-k similarity rises even if the policy is not getting less diverse.
 DIV_EMA_DECAY = 0.99
 DIV_TARGET_STD = 0.3
-div_mean, div_var = None, None
-def normalize_diversity(raw):
-  global div_mean, div_var
-  raw = np.asarray(raw, dtype=np.float64)
-  if div_mean is None:
-    div_mean, div_var = float(raw.mean()), float(raw.var())
-  else:
-    div_mean = DIV_EMA_DECAY * div_mean + (1 - DIV_EMA_DECAY) * float(raw.mean())
-    div_var = DIV_EMA_DECAY * div_var + (1 - DIV_EMA_DECAY) * float(((raw - div_mean) ** 2).mean())
-  std = max(np.sqrt(div_var), 1e-3)
-  return ((raw - div_mean) / std * DIV_TARGET_STD + 1).tolist()
+
+class RunningNorm:
+  def __init__(self):
+    self.mean, self.var = None, None
+
+  @property
+  def std(self):
+    return float(np.sqrt(self.var)) if self.var is not None else None
+
+  def __call__(self, raw):
+    raw = np.asarray(raw, dtype=np.float64)
+    if self.mean is None:
+      self.mean, self.var = float(raw.mean()), float(raw.var())
+    else:
+      self.mean = DIV_EMA_DECAY * self.mean + (1 - DIV_EMA_DECAY) * float(raw.mean())
+      self.var = DIV_EMA_DECAY * self.var + (1 - DIV_EMA_DECAY) * float(((raw - self.mean) ** 2).mean())
+    std = max(np.sqrt(self.var), 1e-3)
+    return ((raw - self.mean) / std * DIV_TARGET_STD + 1).tolist()
+
+image_div_norm = RunningNorm()
+text_div_norm = RunningNorm()
 
 def reward_func_image(completions, product, log_extra=None, log_metric=None, **kwargs):
   # empty completions have no prompt: skip the ~9s Z-Image call and score them 0
@@ -165,10 +181,10 @@ def _image_rewards(prompts, product):
     v = extract_features(path).cpu().numpy()[0]
     raw_diversity.append(1 - topk_cos_score(v_bank, v))
     v_bank.append(v)
-  diversity_scores = normalize_diversity(raw_diversity)
+  diversity_scores = image_div_norm(raw_diversity)
   print(raw_diversity, diversity_scores)
   if wandb.run is not None:
-    wandb.log({"diversity/raw_mean": float(np.mean(raw_diversity)), "diversity/ema_mean": div_mean, "diversity/ema_std": float(np.sqrt(div_var))}, commit=False)
+    wandb.log({"diversity/raw_mean": float(np.mean(raw_diversity)), "diversity/ema_mean": image_div_norm.mean, "diversity/ema_std": image_div_norm.std}, commit=False)
   for i in range(len(prompts)):
     if wandb.run is not None:
       wandb.log({

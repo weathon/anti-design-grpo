@@ -37,23 +37,9 @@ Past prompts:
                 "instructions": """Answer true only if all of the following hold for the current prompt: (1) the positive prompt and the negative prompt (if present) are each readable prompts; (2) neither leaks formatting labels or meta text into the prompt itself, such as 'positive_prompt', 'negative prompt:', 'Prompt:', or explanations addressed to the user; (3) '%%' appears at most once. """,
             },
             {
-                "type": "score",
-                "name": "diversity",
-                "instructions": """Compare the current prompt (positive and negative together) against the past prompts. Judge only the design and style choices: visual style, medium, composition, color treatment, typography, rendering technique, and which aesthetic rules are being broken. Ignore the subject matter. Two prompts about different subjects with the same style count as similar; two prompts about the same subject with very different styles count as different.""",
-                "levels": [
-                    {
-                        "label": "homogenized",
-                        "description": """The same or a closely similar style and design approach already appears several times in the past prompts.""",
-                    },
-                    {
-                        "label": "normal",
-                        "description": """The style overlaps with some past prompts but adds a noticeable new element or combination.""",
-                    },
-                    {
-                        "label": "novel",
-                        "description": """The style and design approach is clearly different from every past prompt.""",
-                    },
-                ],
+                "type": "predicate",
+                "name": "diversity",  # asks about the dominant style, not "every past prompt": that version saturated at 0.00
+                "instructions": """Look at the dominant visual style shared by most of the past prompts. Does the current prompt (positive and negative together) depart from that dominant style in a noticeable way? Judge only the design and style choices: visual style, medium, composition, color treatment, typography, rendering technique, and which aesthetic rules are being broken. Ignore the subject matter. If there are no past prompts, answer true.""",
             },
             {
                 "type": "score",
@@ -94,7 +80,8 @@ Past prompts:
     # describes_image is a hard gate like validity: the policy collapsed into "Create a wild poster for X, do not ..."
     # requests once nothing penalized instruction-style prompts. Negations are a softer penalty (some good prompts use one).
     gate = validity.probability * describes_image.probability * (0.5 + 0.5 * no_negation.probability)
-    return gate * (diversity.score/2 + anti_design.score/3) * 0.5 # range: 0-1
+    # diversity is returned raw (0-1 probability); the caller normalizes it against a running mean/std
+    return gate, diversity.probability, anti_design.score / 3
 
 
 import os
