@@ -61,13 +61,15 @@ def explicit_text_reward(completions, product, log_extra=None, log_metric=None, 
 
 def reward_func_text(completions, log_extra=None, log_metric=None, **kwargs):
   global past
+  bank_was_empty = not past
   gate, novelty, anti_design = zip(*[judge.text_reward(extract(completion[-1]["content"]), past) for completion in completions])
   past.extend([extract(i[-1]["content"].split("%%")[0]) for i in completions])
   if len(past) > 100:
     past = past[-100:]
   # style novelty vs the past bank is normalized like image diversity (mean 1, std DIV_TARGET_STD) so it carries
   # as much weight; the 4B policy otherwise settles into one look (neon slime typography) on every product
-  novelty_scores = text_div_norm(novelty)
+  # with an empty bank every prompt is "novel" (1.0); seeding the running stats with that made the next batch hugely negative
+  novelty_scores = [1.0] * len(novelty) if bank_was_empty else text_div_norm(novelty)
   rewards = [g * (0.5 * a + n) for g, a, n in zip(gate, anti_design, novelty_scores)]
   if wandb.run is not None:
     wandb.log({"text_diversity/raw_mean": float(np.mean(novelty)), "text_diversity/ema_mean": text_div_norm.mean, "text_diversity/ema_std": text_div_norm.std}, commit=False)
@@ -135,8 +137,9 @@ DIV_EMA_DECAY = 0.99
 DIV_TARGET_STD = 0.3
 
 class RunningNorm:
-  def __init__(self):
+  def __init__(self, min_std=1e-3):
     self.mean, self.var = None, None
+    self.min_std = min_std  # floor so a near-constant batch does not blow small differences up
 
   @property
   def std(self):
@@ -149,11 +152,11 @@ class RunningNorm:
     else:
       self.mean = DIV_EMA_DECAY * self.mean + (1 - DIV_EMA_DECAY) * float(raw.mean())
       self.var = DIV_EMA_DECAY * self.var + (1 - DIV_EMA_DECAY) * float(((raw - self.mean) ** 2).mean())
-    std = max(np.sqrt(self.var), 1e-3)
+    std = max(np.sqrt(self.var), self.min_std)
     return ((raw - self.mean) / std * DIV_TARGET_STD + 1).tolist()
 
 image_div_norm = RunningNorm()
-text_div_norm = RunningNorm()
+text_div_norm = RunningNorm(min_std=0.05)  # probabilities, not tightly clustered cosine values
 
 def reward_func_image(completions, product, log_extra=None, log_metric=None, **kwargs):
   # empty completions have no prompt: skip the ~9s Z-Image call and score them 0
