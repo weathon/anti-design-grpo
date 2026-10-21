@@ -106,7 +106,7 @@ def image_reward(image_path, product):
           {
               "type": "score",
               "name": "anti_design",
-              "instructions": """How strongly does this poster use anti-design?""",
+              "instructions": """How strongly does this poster use anti-design? Anti-design has to reject conventional design norms intentionally, not just cool or new design.""",
               "levels": [
                   {
                       "label": "conventional",

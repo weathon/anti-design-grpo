@@ -1,3 +1,5 @@
 .env
 wandb/
-__pycache__/
+__pycache__/trainer_output/checkpoint-*/
+trainer_output/final/
+logs/
