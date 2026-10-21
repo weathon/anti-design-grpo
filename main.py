@@ -149,7 +149,7 @@ index = len(os.listdir("images"))  # don't overwrite images from earlier/resumed
 # The EMA (rather than fixed stats) is needed because raw diversity trends down by construction: as the bank grows,
 # every new image has more near neighbours, so its top-k similarity rises even if the policy is not getting less diverse.
 DIV_EMA_DECAY = 0.99
-DIV_TARGET_STD = 0.3
+DIV_TARGET_STD = 0.8  # 0.3 -> 0.8: at 0.3 run 16 converged onto one neon sticker-collage look for every product
 
 class RunningNorm:
   def __init__(self, min_std=1e-3):
