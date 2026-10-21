@@ -79,7 +79,7 @@ pretrained_model_name = "facebook/dinov3-convnext-tiny-pretrain-lvd1689m"
 dino_processor = AutoImageProcessor.from_pretrained(pretrained_model_name)
 dino = AutoModel.from_pretrained(
     pretrained_model_name,
-    device_map="cpu",  # free GPU memory for colocated vLLM
+    device_map="cuda",
 )
 
 # %%
@@ -196,9 +196,10 @@ training_args = GRPOConfig(
     logging_steps=1,
     log_completions=True,
     max_completion_length=2048,
-    use_vllm=True,
-    vllm_mode="colocate",
-    vllm_gpu_memory_utilization=0.2,
+    chat_template_kwargs={"enable_thinking": False},  # Qwen3.5-4B's template thinks by default (2B's does not); small models loop in their thinking
+    top_k=50,  # same as the fixed-prompt eval (HF generate default), i.e. how the model will be sampled in deployment
+    optim="adamw_torch_8bit",  # torchao 8-bit AdamW: full fine-tuning the 4B with fp32 Adam states does not fit next to Z-Image + HPSv3
+    gradient_checkpointing=True,
     output_dir="trainer_output",
     save_strategy="steps",
     save_steps=10,
@@ -277,8 +278,8 @@ ds = Dataset.from_list([{"prompt": format_prompt(question.replace("<name>", name
 # %%
 from transformers import AutoProcessor, AutoModelForMultimodalLM
 
-processor = AutoProcessor.from_pretrained("Qwen/Qwen3.5-2B")
-model = AutoModelForMultimodalLM.from_pretrained("Qwen/Qwen3.5-2B", device_map="auto")
+processor = AutoProcessor.from_pretrained("Qwen/Qwen3.5-4B")
+model = AutoModelForMultimodalLM.from_pretrained("Qwen/Qwen3.5-4B", device_map="auto")
 
 # %%
 from transformers import TrainerCallback
@@ -293,7 +294,7 @@ class FixedPromptEval(TrainerCallback):
 
   def _run(self, model, processing_class, step):
     messages = format_prompt(question.replace("<name>", EVAL_PRODUCT))
-    text = processing_class.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+    text = processing_class.apply_chat_template(messages, add_generation_prompt=True, tokenize=False, **training_args.chat_template_kwargs)
     inputs = processing_class(text=[text], return_tensors="pt").to(model.device)
     was_training = model.training
     model.eval()

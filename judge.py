@@ -78,9 +78,23 @@ Past prompts:
                     },
                 ],
             },
+            {
+                "type": "predicate",
+                "name": "describes_image",
+                "instructions": """Is the positive prompt (text before '%%') a direct description of the image itself, i.e. what is shown and how it looks? Answer false if it is mainly an instruction or request addressed to a designer or an AI (e.g. starts with 'Create', 'Generate', 'Make', 'Design', 'Write a prompt') or if it mainly restates the task or its rules.""",
+            },
+            {
+                "type": "predicate",
+                "name": "no_negation",
+                "instructions": """Does the positive prompt (text before '%%') describe what should appear, without relying on negated phrases such as 'do not', 'no', 'without', 'avoid'? Ignore the negative prompt after '%%'.""",
+            },
         ],
     )
-    return decision.answers[0].probability * (decision.answers[1].score/2 + decision.answers[2].score/3) * 0.5 # range: 0-1
+    validity, diversity, anti_design, describes_image, no_negation = decision.answers
+    # describes_image is a hard gate like validity: the policy collapsed into "Create a wild poster for X, do not ..."
+    # requests once nothing penalized instruction-style prompts. Negations are a softer penalty (some good prompts use one).
+    gate = validity.probability * describes_image.probability * (0.5 + 0.5 * no_negation.probability)
+    return gate * (diversity.score/2 + anti_design.score/3) * 0.5 # range: 0-1
 
 
 import os
