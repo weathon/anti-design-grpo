@@ -13,7 +13,6 @@ pipe = pipe.to("cuda")
 
 # %%
 import os
-import random
 import re
 import wandb
 import judge
@@ -228,7 +227,7 @@ training_args = GRPOConfig(
     gradient_accumulation_steps=2,  # 4 x 2 = one group of 8 per optimizer step, without 8-sequence backward memory
     num_generations=8,
     report_to="wandb",
-    num_train_epochs=1,  # the dataset already holds each product twice, each time with a different style direction
+    num_train_epochs=2,
     logging_steps=1,
     log_completions=True,
     max_completion_length=1024,  # MAX_PROMPT_CHARS (3000 chars) is ~700 tokens; longer generations earn nothing anyway
@@ -309,34 +308,7 @@ def format_prompt(prompt):
           "content": prompt
       }
   ]
-# Each training prompt names a random design direction to draw on. Without it the policy samples one default look
-# (neon sticker-collage chaos) almost every time, so the diversity rewards have nothing different to pick from;
-# raising their weight 2.7x (run 17) did not prevent the collapse. The fixed-prompt eval stays unconditioned.
-STYLE_DIRECTIONS = [
-    "Soviet constructivism", "Dada photomontage", "Victorian letterpress broadside", "Y2K early-web aesthetics",
-    "risograph zine printing", "Bauhaus", "Japanese ukiyo-e woodblock", "Swiss punk typography",
-    "1970s psychedelic concert posters", "Russian avant-garde lithography", "medieval illuminated manuscripts",
-    "Mexican lucha libre posters", "brutalist concrete architecture", "Art Nouveau", "1980s Memphis design",
-    "Polish film poster school", "Chinese propaganda posters", "Ghanaian hand-painted movie posters",
-    "Hong Kong neon signage", "baroque still life painting", "photocopied punk flyers", "Fluxus event scores",
-    "Wiener Werkstätte", "1950s atomic-age advertising", "De Stijl", "Op art", "outsider art and art brut",
-    "Indian truck art", "Victorian scientific illustration", "Mughal miniature painting", "Mayan glyph carving",
-    "Byzantine mosaics", "Cubist collage", "German Expressionist woodcuts", "Futurist manifestos",
-    "Ottoman calligraphy", "tarot card illustration", "children's crayon drawings", "ASCII art and terminal screens",
-    "stained glass windows", "embroidered textile samplers", "1990s rave flyers", "wartime ration posters",
-    "cave paintings", "hand-lettered sign painting", "vintage seed packet illustration", "comic book halftone print",
-    "Kente cloth patterns", "Art Deco travel posters", "Victorian circus posters", "Situationist détournement",
-    "Bollywood hand-painted billboards", "vaporwave", "medical anatomy charts", "architectural blueprints",
-]
-style_rng = random.Random(0)
-# one row per product per epoch (num_train_epochs=1 below), each with its own random direction
-rows = []
-for _ in range(2):
-  for name in names:
-    style = style_rng.choice(STYLE_DIRECTIONS)
-    rows.append({"prompt": format_prompt(question.replace("<name>", name) + f", drawing on {style}"), "product": name, "style": style})
-style_rng.shuffle(rows)
-ds = Dataset.from_list(rows)
+ds = Dataset.from_list([{"prompt": format_prompt(question.replace("<name>", name)), "product": name} for name in names])
 
 # %%
 from transformers import AutoProcessor, AutoModelForMultimodalLM

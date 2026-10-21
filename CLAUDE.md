@@ -11,7 +11,6 @@ Keep notes here, not in Claude's memory directory: this VM wipes everything outs
 
 ## Running
 - Training runs in the `grpo-vllm` conda env (a clone of base with vLLM 0.32, which pins torch 2.13 / transformers 5.19, plus flash-linear-attention). vLLM generation is currently off: quality over speed. The HPSv3 reward server runs from `~/.hpsv3`.
-- Policy is Qwen3.5-2B (4B followed the system prompt better but collapsed onto one default style; 2B looked more varied), full fine-tuning with torchao 8-bit AdamW and gradient checkpointing. No KL penalty (`beta=0`).
-- Each training prompt ends with ", drawing on <style>" from `STYLE_DIRECTIONS` in main.py (random per row, seed 0); the fixed eval prompt has no style direction.
+- Policy is Qwen3.5-2B (the 4B followed the system prompt better but collapsed onto one default style), full fine-tuning with torchao 8-bit AdamW and gradient checkpointing. No KL penalty (`beta=0`).
 - `./launch.sh` starts or reuses the HPSv3 server, then launches `main.py` into the next `logs/train_N.log`, resuming from the latest checkpoint in `trainer_output/`.
 - Delete `trainer_output/wandb_run_id.txt` (and move old checkpoints aside) to start a fresh run instead of resuming.
